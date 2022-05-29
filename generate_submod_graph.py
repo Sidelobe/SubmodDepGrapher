@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
+╔═╗┬ ┬┌┐ ┌┬┐┌─┐┌┬┐╔╦╗┌─┐┌─┐╔═╗┬─┐┌─┐┌─┐┬ ┬┌─┐┬─┐
+╚═╗│ │├┴┐││││ │ ││ ║║├┤ ├─┘║ ╦├┬┘├─┤├─┘├─┤├┤ ├┬┘
+╚═╝└─┘└─┘┴ ┴└─┘─┴┘═╩╝└─┘┴  ╚═╝┴└─┴ ┴┴  ┴ ┴└─┘┴└─
+
 A script that creates a dependency graph of GIT submodules present in a
 user-provided list of GIT repositories.
 
-@author: lorenz
+@author: Lorenz Bucher
+@url: https://github.com/Sidelobe/SubmodDepGrapher
 """
 
+import sys
 import re
 import subprocess
 import argparse
@@ -18,14 +24,7 @@ git_submodule_regex = re.compile(r".+\.path=(.+)$\n.+\.url=(.+)$", re.MULTILINE)
 
 PRINT_DEBUG = False
 
-def parsed_uri(string):
-    if urlparse(string).scheme in ('http', 'https',):
-        return ['URL', string]
-    else:
-        return ['local', pathlib.PurePath(string).name]
-
 def list_submodules(uri):
-
     # git config --blob HEAD:.gitmodules --list
     # git submodule foreach --recursive git remote get-url origin
 
@@ -33,9 +32,8 @@ def list_submodules(uri):
         print("is URL")
         # TODO: test URL
     else:
-        thisRepo = pathlib.PurePath(uri).name
+        thisRepoName= pathlib.PurePath(uri).name
         try:
-
             l = subprocess.run("git config --blob HEAD:.gitmodules --list",
                                cwd=f"{uri}",
                                check=True,
@@ -43,11 +41,10 @@ def list_submodules(uri):
                                shell=True,
                                text=True).stdout
 
-
             submodules = re.findall(git_submodule_regex, l)
 
             if PRINT_DEBUG:
-                print("Repo [{}] has: ".format(thisRepo))
+                print("Repo [{}] has: ".format(thisRepoName))
                 for submodule in submodules:
                     print("Submodule [{}] at location [{}]".format(submodule[0], submodule[1]))
 
@@ -57,19 +54,20 @@ def list_submodules(uri):
                 print(f"    	{line}")
             return []
 
-        return [thisRepo, submodules]
+        return [thisRepoName, submodules]
 
     return []
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    #Çparser.add_argument('-repos', help='List of repositories (path or URL)', type=parsed_uri, nargs='+', default='examples/repo1')
     parser.add_argument('-o', '--output', help='Path of the output file (without extension)',
                         default='out')
     parser.add_argument('-f', '--format', help='Format of the output file', default='pdf',
                         choices=['bmp', 'gif', 'jpg', 'png', 'pdf', 'svg'])
     parser.add_argument('-v', '--view', action='store_true', help='View the graph')
+    parser.add_argument('-r', '--repos', help='List of repositories (path or URL), delimited by space',
+                        nargs='+', type=str, default='')
 
     args = parser.parse_args()
 
@@ -80,13 +78,16 @@ if __name__ == '__main__':
         generate dependency graph
     '''
 
-    #submoduleLists = args.repos
-    #print(submoduleLists)
+    print (args.repos)
+
     submoduleLists = []
-    submoduleLists.append(list_submodules("./examples/repo1"))
-    submoduleLists.append(list_submodules("./examples/repo2"))
-    submoduleLists.append(list_submodules("./examples/repo3"))
-    submoduleLists.append(list_submodules("./examples/repo4"))
+    for repo in args.repos:
+        submoduleLists.append(list_submodules(repo))
+
+    # submoduleLists.append(list_submodules("./examples/repo1"))
+    # submoduleLists.append(list_submodules("./examples/repo2"))
+    # submoduleLists.append(list_submodules("./examples/repo3"))
+    # submoduleLists.append(list_submodules("./examples/repo4"))
 
     # Consolidate Data
     repos = []
