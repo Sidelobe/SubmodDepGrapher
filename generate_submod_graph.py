@@ -60,6 +60,47 @@ def list_submodules(uri):
     return []
 
 
+def consolidate_data():
+    repos = []
+    refRepos = {} # dict with uri->name
+    edges = [] # list with [from, to]
+
+    for submoduleList in submoduleLists:
+        if not submoduleList:
+            continue
+    
+        repoName = submoduleList[0]
+        repos.append(repoName)
+        for dep in submoduleList[1]:
+            subRepoName = dep[0]
+    
+            # 'strip' any path prefixes, retain just the top directory
+            rest, tail = os.path.split(subRepoName)
+            subRepoName = tail
+    
+            uri = dep[1] # URI is unique identifier (= key)
+    
+            if urlparse(uri).scheme in ('http', 'https'):
+                uri = uri.removesuffix('.git') # remove from end if present
+            else:
+                uri = os.path.abspath(uri) # store as absolute path to avoid
+    
+            if uri in refRepos:
+                subRepoName = refRepos[uri] # use same name previously assigned
+            elif subRepoName in refRepos.values():
+                # same name has already been used, but with a different URI
+                # -> modify the name to make it unique and stand out
+                subRepoName = subRepoName + "*"
+                refRepos.setdefault(uri, subRepoName)
+            else:
+                # First name given to the referenced repo becomes the name of node on graph
+                refRepos.setdefault(uri, subRepoName)
+    
+            # Add connection
+            edges.append([repoName, subRepoName])
+
+    return [repos, refRepos, edges]
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--output', help='Path of the output file (without extension)',
@@ -83,33 +124,8 @@ if __name__ == '__main__':
     for repo in args.repos:
         submoduleLists.append(list_submodules(repo))
 
-    # Consolidate Data
-    repos = []
-    refRepos = {} # dict with uri->name
-    edges = [] # list with [from, to]
-    for submoduleList in submoduleLists:
-        if not submoduleList:
-            continue
-
-        repoName = submoduleList[0]
-        repos.append(repoName)
-        for dep in submoduleList[1]:
-            subRepoName = dep[0]
-
-            # 'strip' any path prefixes, retain just the top directory
-            rest, tail = os.path.split(subRepoName)
-            subRepoName = tail
-
-            uri = dep[1] # URI is unique identifier (= key)
-
-            if uri in refRepos:
-                subRepoName = refRepos[uri] # use name previously assigned
-            else:
-                # First name given to the referenced repo becomes the name of node on graph
-                refRepos.setdefault(uri, subRepoName)
-
-            # Add connection
-            edges.append([repoName, subRepoName])
+    # Get data ready for graphviz
+    [repos, refRepos, edges] = consolidate_data()
 
     # Create graph
     graph = Digraph()
