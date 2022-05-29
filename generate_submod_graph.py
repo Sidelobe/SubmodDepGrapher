@@ -35,7 +35,7 @@ def list_submodules(uri):
     else:
         thisRepoName= pathlib.PurePath(uri).name
         try:
-            l = subprocess.run("git config --blob HEAD:.gitmodules --list",
+            l = subprocess.run("git config --file .gitmodules --list",
                                cwd=f"{uri}",
                                check=True,
                                capture_output=True,
