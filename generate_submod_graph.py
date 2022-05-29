@@ -20,20 +20,44 @@ import pathlib
 from urllib.parse import urlparse
 from graphviz import Digraph
 
-git_submodule_regex = re.compile(r".+\.path=(.+)$\n.+\.url=(.+)$", re.MULTILINE)
+git_submodule_regex = re.compile(r".+\.?path\s?=\s?(.+)$\n.+\.?url\s?=\s?(.+)$", re.MULTILINE)
 
-PRINT_DEBUG = True
+PRINT_DEBUG = False
+temp_data = ".tempData" # directory to store temporary data
 
 def list_submodules(uri):
     # git config --blob HEAD:.gitmodules --list
     # git submodule foreach --recursive git remote get-url origin
 
     if urlparse(uri).scheme in ('http', 'https'):
-        print("is URL")
-        raise ValueError("Not implemented yet!")
-        # TODO: test URL
+        # Clone the repository locally into a temp folder (bare, shallow) to get the contents of the
+        # gitmodules directory. Some hosts like Github do not support git archive.
+        this_repo_name = uri.rsplit('/', 1)[-1] # take portion after last slash
+        gitmodules_file_cat = ""
+        try:
+            subprocess.run("git clone --depth=1 --bare {0} {1}".format(uri, this_repo_name),
+                            cwd=temp_data,
+                            check=True,
+                            capture_output=False,
+                            shell=True,
+                            text=True)
+            gitmodules_file_cat = subprocess.run(r"git show HEAD:.gitmodules",
+                                              cwd=os.path.join(temp_data, this_repo_name),
+                                              check=True,
+                                              capture_output=True,
+                                              shell=True,
+                                              text=True).stdout
+
+            subprocess.run(r"rm -rf {0}".format(this_repo_name), cwd=temp_data, shell=True)
+
+            submodules = re.findall(git_submodule_regex, gitmodules_file_cat)
+
+        except subprocess.CalledProcessError as exc:
+            print(f"    	{exc.output}")
+            return []
+
     else:
-        thisRepoName= pathlib.PurePath(uri).name
+        this_repo_name = pathlib.PurePath(uri).name
         try:
             l = subprocess.run("git config --file .gitmodules --list",
                                cwd=f"{uri}",
@@ -45,7 +69,7 @@ def list_submodules(uri):
             submodules = re.findall(git_submodule_regex, l)
 
             if PRINT_DEBUG:
-                print("Repo [{}] has: ".format(thisRepoName))
+                print("Repo [{}] has: ".format(this_repo_name))
                 for submodule in submodules:
                     print("Submodule [{}] at location [{}]".format(submodule[0], submodule[1]))
 
@@ -55,9 +79,7 @@ def list_submodules(uri):
                 print(f"    	{line}")
             return []
 
-        return [thisRepoName, submodules]
-
-    return []
+    return [this_repo_name, submodules]
 
 
 def consolidate_data():
@@ -120,6 +142,8 @@ if __name__ == '__main__':
         generate dependency graph
     '''
 
+    subprocess.run(r"mkdir -p {0}".format(temp_data), shell=True)
+
     submoduleLists = []
     for repo in args.repos:
         submoduleLists.append(list_submodules(repo))
@@ -140,3 +164,5 @@ if __name__ == '__main__':
 
     graph.format = args.format
     graph.render(args.output, cleanup=True, view=args.view)
+
+    subprocess.run(r"rm -rf {0}".format(temp_data), shell=True)
