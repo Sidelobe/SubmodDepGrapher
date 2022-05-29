@@ -12,8 +12,8 @@ user-provided list of GIT repositories.
 @url: https://github.com/Sidelobe/SubmodDepGrapher
 """
 
-import sys
 import re
+import os
 import subprocess
 import argparse
 import pathlib
@@ -22,14 +22,15 @@ from graphviz import Digraph
 
 git_submodule_regex = re.compile(r".+\.path=(.+)$\n.+\.url=(.+)$", re.MULTILINE)
 
-PRINT_DEBUG = False
+PRINT_DEBUG = True
 
 def list_submodules(uri):
     # git config --blob HEAD:.gitmodules --list
     # git submodule foreach --recursive git remote get-url origin
 
-    if urlparse(uri).scheme in ('http', 'https',):
+    if urlparse(uri).scheme in ('http', 'https'):
         print("is URL")
+        raise ValueError("Not implemented yet!")
         # TODO: test URL
     else:
         thisRepoName= pathlib.PurePath(uri).name
@@ -78,20 +79,13 @@ if __name__ == '__main__':
         generate dependency graph
     '''
 
-    print (args.repos)
-
     submoduleLists = []
     for repo in args.repos:
         submoduleLists.append(list_submodules(repo))
 
-    # submoduleLists.append(list_submodules("./examples/repo1"))
-    # submoduleLists.append(list_submodules("./examples/repo2"))
-    # submoduleLists.append(list_submodules("./examples/repo3"))
-    # submoduleLists.append(list_submodules("./examples/repo4"))
-
     # Consolidate Data
     repos = []
-    refRepos = {} # dict with url->name
+    refRepos = {} # dict with uri->name
     edges = [] # list with [from, to]
     for submoduleList in submoduleLists:
         if not submoduleList:
@@ -101,13 +95,18 @@ if __name__ == '__main__':
         repos.append(repoName)
         for dep in submoduleList[1]:
             subRepoName = dep[0]
-            url = dep[1] # URL is unique identifier = key
 
-            if url in refRepos:
-                subRepoName = refRepos[url] # use name previously assigned
+            # 'strip' any path prefixes, retain just the top directory
+            rest, tail = os.path.split(subRepoName)
+            subRepoName = tail
+
+            uri = dep[1] # URI is unique identifier (= key)
+
+            if uri in refRepos:
+                subRepoName = refRepos[uri] # use name previously assigned
             else:
                 # First name given to the referenced repo becomes the name of node on graph
-                refRepos.setdefault(url, subRepoName)
+                refRepos.setdefault(uri, subRepoName)
 
             # Add connection
             edges.append([repoName, subRepoName])
