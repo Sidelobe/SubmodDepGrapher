@@ -123,6 +123,29 @@ def consolidate_data():
 
     return [repos, refRepos, edges]
 
+def scan_dir_for_repos(dir):
+    dir = os.path.abspath(dir)
+    dir_list = []
+    for subdir in os.listdir(dir):
+        subdir_path = os.path.join(dir, subdir)
+        if os.path.isdir(subdir_path):
+            try:
+                is_git_repo = subprocess.run("git rev-parse --is-inside-work-tree",
+                                               cwd=f"{subdir_path}",
+                                               check=True,
+                                               capture_output=True,
+                                               shell=True,
+                                               text=True).stdout
+
+            except subprocess.CalledProcessError:
+                is_git_repo = "False"
+
+            if "true" in str.lower(is_git_repo):
+                dir_list.append(subdir_path)
+
+    return dir_list
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--output', help='Path of the output file (without extension)',
@@ -132,6 +155,8 @@ if __name__ == '__main__':
     parser.add_argument('-v', '--view', action='store_true', help='View the graph')
     parser.add_argument('-r', '--repos', help='List of repositories (path or URL), delimited by space',
                         nargs='+', type=str, default='')
+    parser.add_argument('-d', '--dir', help='Base directory that will be scanned for direct subfolders with repos in them',
+                        type=str, default='')
 
     args = parser.parse_args()
 
@@ -144,8 +169,15 @@ if __name__ == '__main__':
 
     subprocess.run(r"mkdir -p {0}".format(temp_data), shell=True)
 
+    repositoryList = args.repos
+
+    # in case the directory option was used, extend the repository list with that
+    if args.dir:
+        # Scan directory for
+        repositoryList = scan_dir_for_repos(args.dir)
+
     submoduleLists = []
-    for repo in args.repos:
+    for repo in repositoryList:
         submoduleLists.append(list_submodules(repo))
 
     # Get data ready for graphviz
