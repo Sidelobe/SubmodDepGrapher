@@ -25,7 +25,7 @@ git_submodule_regex = re.compile(r".+\.?path\s?=\s?(.+)$\n.+\.?url\s?=\s?(.+)$",
 PRINT_DEBUG = False
 temp_data = ".tempData" # directory to store temporary data
 
-def list_submodules(uri):
+def list_submodules(uri, showleaves):
     # git config --blob HEAD:.gitmodules --list
     # git submodule foreach --recursive git remote get-url origin
 
@@ -41,6 +41,7 @@ def list_submodules(uri):
                             capture_output=False,
                             shell=True,
                             text=True)
+
             gitmodules_file_cat = subprocess.run(r"git show HEAD:.gitmodules",
                                               cwd=os.path.join(temp_data, this_repo_name),
                                               check=True,
@@ -53,11 +54,23 @@ def list_submodules(uri):
             submodules = re.findall(git_submodule_regex, gitmodules_file_cat)
 
         except subprocess.CalledProcessError as exc:
-            print(f"    	{exc.output}")
+            if len(gitmodules_file_cat ) == 0:
+                if showleaves:
+                    return [this_repo_name, []]
+                else:
+                    return []
+
+            print("Error in {0}: {1}".format(this_repo_name, exc.stderr))
             return []
 
     else:
         this_repo_name = pathlib.PurePath(uri).name
+        if not os.path.exists(os.path.join(uri, ".gitmodules")):
+            if showleaves:
+                return [this_repo_name, []]
+            else:
+                return []
+
         try:
             l = subprocess.run("git config --file .gitmodules --list",
                                cwd=f"{uri}",
@@ -76,7 +89,8 @@ def list_submodules(uri):
         except subprocess.CalledProcessError as exc:
             error_msg = exc.output.splitlines()
             for line in error_msg:
-                print(f"    	{line}")
+                print(f"    	{exc.output}")
+            print("Error in {0}: {1}".format(this_repo_name, exc.stderr))
             return []
 
     return [this_repo_name, submodules]
@@ -153,6 +167,7 @@ if __name__ == '__main__':
     parser.add_argument('-f', '--format', help='Format of the output file', default='pdf',
                         choices=['bmp', 'gif', 'jpg', 'png', 'pdf', 'svg'])
     parser.add_argument('-v', '--view', action='store_true', help='View the graph')
+    parser.add_argument('-s', '--showleaves',  action=argparse.BooleanOptionalAction, help='Also show repositories without submodules')
     parser.add_argument('-r', '--repos', help='List of repositories (path or URL), delimited by space',
                         nargs='+', type=str, default='')
     parser.add_argument('-d', '--dir', help='Base directory that will be scanned for direct subfolders with repos in them',
@@ -178,7 +193,7 @@ if __name__ == '__main__':
 
     submoduleLists = []
     for repo in repositoryList:
-        submoduleLists.append(list_submodules(repo))
+        submoduleLists.append(list_submodules(repo, args.showleaves))
 
     # Get data ready for graphviz
     [repos, refRepos, edges] = consolidate_data()
